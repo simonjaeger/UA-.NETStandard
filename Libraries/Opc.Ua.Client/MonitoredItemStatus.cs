@@ -28,10 +28,6 @@
  * ======================================================================*/
 
 using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Xml;
-using System.Runtime.Serialization;
 
 namespace Opc.Ua.Client
 {
@@ -47,6 +43,15 @@ namespace Opc.Ua.Client
         internal MonitoredItemStatus()
         {
             Initialize();
+        }
+
+        /// <summary>
+        /// Creates a empty object with an id.
+        /// </summary>
+        internal MonitoredItemStatus(uint id)
+        {
+            Initialize();
+            m_id = id;
         }
 
         private void Initialize()

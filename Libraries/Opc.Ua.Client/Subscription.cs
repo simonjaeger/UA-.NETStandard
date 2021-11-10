@@ -50,7 +50,16 @@ namespace Opc.Ua.Client
         {
             Initialize();
         }
-        
+
+        /// <summary>
+        /// Creates a subscription with subscription id
+        /// </summary>
+        public Subscription(uint id)
+        {
+            Initialize();
+            m_id = id;
+        }
+
         /// <summary>
         /// Initializes the subscription from a template.
         /// </summary>
@@ -712,7 +721,54 @@ namespace Opc.Ua.Client
             }
         }
         #endregion
-        
+
+        #region Public Static Methods
+        /// <summary>
+        /// Creates a new subscription with the provided parameters
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="displayName"></param>
+        /// <param name="publishingInterval"></param>
+        /// <param name="keepAliveCount"></param>
+        /// <param name="lifetimeCount"></param>
+        /// <param name="maxNotificationsPerPublish"></param>
+        /// <param name="publishingEnabled"></param>
+        /// <param name="priority"></param>
+        /// <param name="timestampsToReturn"></param>
+        /// <param name="maxMessageCount"></param>
+        /// <param name="minLifetimeInterval"></param>
+        /// <param name="disableMonitoredItemCache"></param>
+        /// <returns></returns>
+        public static Subscription Create(
+            uint id,
+            string displayName,
+            int publishingInterval,
+            uint keepAliveCount,
+            uint lifetimeCount,
+            uint maxNotificationsPerPublish,
+            bool publishingEnabled,
+            byte priority,
+            TimestampsToReturn timestampsToReturn,
+            int maxMessageCount,
+            uint minLifetimeInterval,
+            bool disableMonitoredItemCache)
+        {
+            return new Subscription(id) {
+                DisplayName = displayName,
+                PublishingInterval = publishingInterval,
+                KeepAliveCount = keepAliveCount,
+                LifetimeCount = lifetimeCount,
+                MaxNotificationsPerPublish = maxNotificationsPerPublish,
+                PublishingEnabled = publishingEnabled,
+                Priority = priority,
+                TimestampsToReturn = timestampsToReturn,
+                MaxMessageCount = maxMessageCount,
+                MinLifetimeInterval = minLifetimeInterval,
+                DisableMonitoredItemCache = disableMonitoredItemCache
+            };
+        }
+        #endregion
+
         #region Public Methods
         /// <summary>
         /// Ensures sensible values for the counts.
@@ -2151,7 +2207,7 @@ namespace Opc.Ua.Client
         #endregion
         
         #region Private Fields
-        private SubscriptionChangeMask m_changeMask;
+        private readonly SubscriptionChangeMask m_changeMask;
         #endregion
     }
 

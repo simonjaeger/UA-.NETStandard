@@ -29,10 +29,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Xml;
 using System.Runtime.Serialization;
-using System.Reflection;
 
 namespace Opc.Ua.Client
 {
@@ -63,7 +60,19 @@ namespace Opc.Ua.Client
             Initialize();
             m_clientHandle = clientHandle;
         }
-        
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MonitoredItem"/> class.
+        /// </summary>
+        /// <param name="clientHandle">The client handle. The caller must ensure it uniquely identifies the monitored item.</param>
+        /// <param name="id">The server item id. The caller must ensure it uniquely identifies the monitored item.</param>
+        public MonitoredItem(uint clientHandle, uint id)
+        {
+            Initialize();
+            m_clientHandle = clientHandle;
+            m_status = new MonitoredItemStatus(id);
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MonitoredItem"/> class.
         /// </summary>
@@ -461,6 +470,59 @@ namespace Opc.Ua.Client
         public MonitoredItemStatus Status
         {
             get { return m_status; }
+        }
+        #endregion
+
+        #region Public Static Methods
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="clientHandle"></param>
+        /// <param name="displayName"></param>
+        /// <param name="startNodeId"></param>
+        /// <param name="relativePath"></param>
+        /// <param name="nodeClass"></param>
+        /// <param name="attributeId"></param>
+        /// <param name="indexRange"></param>
+        /// <param name="encoding"></param>
+        /// <param name="monitoringMode"></param>
+        /// <param name="samplingInterval"></param>
+        /// <param name="filter"></param>
+        /// <param name="queueSize"></param>
+        /// <param name="discardOldest"></param>
+        /// <returns></returns>
+        public static MonitoredItem Create(
+            uint id,
+            uint clientHandle,
+            string displayName,
+            NodeId startNodeId,
+            string relativePath,
+            NodeClass nodeClass,
+            uint attributeId,
+            string indexRange,
+            QualifiedName encoding,
+            MonitoringMode monitoringMode,
+            int samplingInterval,
+            MonitoringFilter filter,
+            uint queueSize,
+            bool discardOldest)
+        {
+            return new MonitoredItem(clientHandle, id)
+            {
+                DisplayName = displayName,
+                StartNodeId = startNodeId,
+                RelativePath = relativePath,
+                NodeClass = nodeClass,
+                AttributeId = attributeId,
+                IndexRange = indexRange,
+                Encoding = encoding,
+                MonitoringMode = monitoringMode,
+                SamplingInterval = samplingInterval,
+                Filter = filter,
+                QueueSize = queueSize,
+                DiscardOldest = discardOldest
+            };
         }
         #endregion
 
@@ -1106,7 +1168,7 @@ namespace Opc.Ua.Client
         #endregion
         
         #region Private Fields
-        private IEncodeable m_notificationValue;
+        private readonly IEncodeable m_notificationValue;
         #endregion
     }
     
@@ -1210,7 +1272,7 @@ namespace Opc.Ua.Client
         #region Private Fields
         private int m_queueSize;
         private DataValue m_lastValue;
-        private Queue<DataValue> m_values;
+        private readonly Queue<DataValue> m_values;
         #endregion
     }
     
@@ -1303,7 +1365,7 @@ namespace Opc.Ua.Client
         #region Private Fields
         private int m_queueSize;
         private EventFieldList m_lastEvent;
-        private Queue<EventFieldList> m_events;
+        private readonly Queue<EventFieldList> m_events;
         #endregion
     }
 }

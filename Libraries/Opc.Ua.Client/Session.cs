@@ -29,6 +29,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.Serialization;
@@ -37,7 +38,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using Opc.Ua.Security.Certificates;
 
 namespace Opc.Ua.Client
 {
@@ -721,6 +721,11 @@ namespace Opc.Ua.Client
                 }
             }
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public SessionSecurity SessionSecurity { get; private set; }
         #endregion
 
         #region Public Static Methods
@@ -734,6 +739,13 @@ namespace Opc.Ua.Client
         /// <param name="sessionTimeout">The timeout period for the session.</param>
         /// <param name="identity">The identity.</param>
         /// <param name="preferredLocales">The user identity to associate with the session.</param>
+        /// <param name="sessionId"></param>
+        /// <param name="sessionCookie"></param>
+        /// <param name="serverNonce"></param>
+        /// <param name="serverCertificateData"></param>
+        /// <param name="serverSignature"></param>
+        /// <param name="serverSoftwareCertificates"></param>
+        /// <param name="maxRequestMessageSize"></param>
         /// <returns>The new session object</returns>
         public static Task<Session> Create(
             ApplicationConfiguration configuration,
@@ -742,9 +754,17 @@ namespace Opc.Ua.Client
             string sessionName,
             uint sessionTimeout,
             IUserIdentity identity,
-            IList<string> preferredLocales)
+            IList<string> preferredLocales,
+            NodeId sessionId = null,
+            NodeId sessionCookie = null,
+            byte[] serverNonce = null,
+            byte[] serverCertificateData = null,
+            SignatureData serverSignature = null,
+            SignedSoftwareCertificateCollection serverSoftwareCertificates = null,
+            uint maxRequestMessageSize = 0)
         {
-            return Create(configuration, endpoint, updateBeforeConnect, false, sessionName, sessionTimeout, identity, preferredLocales);
+            return Create(configuration, endpoint, updateBeforeConnect, false, sessionName, sessionTimeout, identity, preferredLocales,
+                sessionId, sessionCookie, serverNonce, serverCertificateData, serverSignature, serverSoftwareCertificates, maxRequestMessageSize);
         }
 
         /// <summary>
@@ -758,6 +778,13 @@ namespace Opc.Ua.Client
         /// <param name="sessionTimeout">The timeout period for the session.</param>
         /// <param name="identity">The user identity to associate with the session.</param>
         /// <param name="preferredLocales">The preferred locales.</param>
+        /// <param name="sessionId"></param>
+        /// <param name="sessionCookie"></param>
+        /// <param name="serverNonce"></param>
+        /// <param name="serverCertificateData"></param>
+        /// <param name="serverSignature"></param>
+        /// <param name="serverSoftwareCertificates"></param>
+        /// <param name="maxRequestMessageSize"></param>
         /// <returns>The new session object.</returns>
         public static Task<Session> Create(
             ApplicationConfiguration configuration,
@@ -767,9 +794,17 @@ namespace Opc.Ua.Client
             string sessionName,
             uint sessionTimeout,
             IUserIdentity identity,
-            IList<string> preferredLocales)
+            IList<string> preferredLocales,
+            NodeId sessionId = null,
+            NodeId sessionCookie = null,
+            byte[] serverNonce = null,
+            byte[] serverCertificateData = null,
+            SignatureData serverSignature = null,
+            SignedSoftwareCertificateCollection serverSoftwareCertificates = null,
+            uint maxRequestMessageSize = 0)
         {
-            return Create(configuration, null, endpoint, updateBeforeConnect, checkDomain, sessionName, sessionTimeout, identity, preferredLocales);
+            return Create(configuration, null, endpoint, updateBeforeConnect, checkDomain, sessionName, sessionTimeout, identity, preferredLocales,
+                sessionId, sessionCookie, serverNonce, serverCertificateData, serverSignature, serverSoftwareCertificates, maxRequestMessageSize);
         }
 
         /// <summary>
@@ -784,6 +819,13 @@ namespace Opc.Ua.Client
         /// <param name="sessionTimeout">The timeout period for the session.</param>
         /// <param name="identity">The user identity to associate with the session.</param>
         /// <param name="preferredLocales">The preferred locales.</param>
+        /// <param name="sessionId"></param>
+        /// <param name="sessionCookie"></param>
+        /// <param name="serverNonce"></param>
+        /// <param name="serverCertificateData"></param>
+        /// <param name="serverSignature"></param>
+        /// <param name="serverSoftwareCertificates"></param>
+        /// <param name="maxRequestMessageSize"></param>
         /// <returns>The new session object.</returns>
         public static async Task<Session> Create(
             ApplicationConfiguration configuration,
@@ -794,7 +836,14 @@ namespace Opc.Ua.Client
             string sessionName,
             uint sessionTimeout,
             IUserIdentity identity,
-            IList<string> preferredLocales)
+            IList<string> preferredLocales,
+            NodeId sessionId = null,
+            NodeId sessionCookie = null,
+            byte[] serverNonce = null,
+            byte[] serverCertificateData = null,
+            SignatureData serverSignature = null,
+            SignedSoftwareCertificateCollection serverSoftwareCertificates = null,
+            uint maxRequestMessageSize = 0)
         {
             endpoint.UpdateBeforeConnect = updateBeforeConnect;
 
@@ -868,7 +917,25 @@ namespace Opc.Ua.Client
             // create the session.
             try
             {
-                session.Open(sessionName, sessionTimeout, identity, preferredLocales, checkDomain);
+                bool succeeded = false;
+                if (sessionId != null)
+                {
+                    try
+                    {
+                        session.Open(sessionName, sessionTimeout, identity, preferredLocales, checkDomain,
+                            sessionId, sessionCookie, serverNonce, serverCertificateData, serverSignature, serverSoftwareCertificates, maxRequestMessageSize);
+                        succeeded = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(ex.Message);
+                    }
+                }
+
+                if (!succeeded)
+                {
+                    session.Open(sessionName, sessionTimeout, identity, preferredLocales, checkDomain);
+                }
             }
             catch (Exception)
             {
@@ -1234,6 +1301,7 @@ namespace Opc.Ua.Client
                     m_serverNonce = serverNonce;
                     m_reconnecting = false;
                     publishCount = m_subscriptions.Count;
+                    SessionSecurity.ServerNonce = serverNonce;
                 }
 
                 // refill pipeline.
@@ -2287,13 +2355,27 @@ namespace Opc.Ua.Client
         /// <param name="identity">The user identity.</param>
         /// <param name="preferredLocales">The list of preferred locales.</param>
         /// <param name="checkDomain">If set to <c>true</c> then the domain in the certificate must match the endpoint used.</param>
+        /// <param name="sessionId"></param>
+        /// <param name="sessionCookie"></param>
+        /// <param name="serverNonce"></param>
+        /// <param name="serverCertificateData"></param>
+        /// <param name="serverSignature"></param>
+        /// <param name="serverSoftwareCertificates"></param>
+        /// <param name="maxRequestMessageSize"></param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1506:AvoidExcessiveClassCoupling")]
         public void Open(
             string sessionName,
             uint sessionTimeout,
             IUserIdentity identity,
             IList<string> preferredLocales,
-            bool checkDomain)
+            bool checkDomain,
+            NodeId sessionId = null,
+            NodeId sessionCookie = null,
+            byte[] serverNonce = null,
+            byte[] serverCertificateData = null,
+            SignatureData serverSignature = null,
+            SignedSoftwareCertificateCollection serverSoftwareCertificates = null,
+            uint maxRequestMessageSize = 0)
         {
             // check connection state.
             lock (SyncRoot)
@@ -2345,9 +2427,9 @@ namespace Opc.Ua.Client
 
             if (!requireEncryption)
             {
-                requireEncryption = identityPolicy.SecurityPolicyUri != SecurityPolicies.None && 
+                requireEncryption = identityPolicy.SecurityPolicyUri != SecurityPolicies.None &&
                     !String.IsNullOrEmpty(identityPolicy.SecurityPolicyUri);
-            }           
+            }
 
             // validate the server certificate /certificate chain.
             X509Certificate2 serverCertificate = null;
@@ -2380,13 +2462,14 @@ namespace Opc.Ua.Client
             // create a nonce.
             uint length = (uint)m_configuration.SecurityConfiguration.NonceLength;
             byte[] clientNonce = Utils.Nonce.CreateNonce(length);
-            NodeId sessionId = null;
-            NodeId sessionCookie = null;
-            byte[] serverNonce = new byte[0];
-            byte[] serverCertificateData = new byte[0];
-            SignatureData serverSignature = null;
-            EndpointDescriptionCollection serverEndpoints = null;
-            SignedSoftwareCertificateCollection serverSoftwareCertificates = null;
+            if (serverNonce == null)
+            {
+                serverNonce = new byte[0];
+            }
+            if (serverCertificateData == null)
+            {
+                serverCertificateData = new byte[0];
+            }
 
             // send the application instance certificate for the client.
             byte[] clientCertificateData = m_instanceCertificate != null ? m_instanceCertificate.RawData : null;
@@ -2416,63 +2499,77 @@ namespace Opc.Ua.Client
                 sessionTimeout = (uint)m_configuration.ClientConfiguration.DefaultSessionTimeout;
             }
 
+            EndpointDescriptionCollection serverEndpoints = null;
             bool successCreateSession = false;
-            //if security none, first try to connect without certificate
-            if (m_endpoint.Description.SecurityPolicyUri == SecurityPolicies.None)
+
+            if (sessionId == null)
             {
-                //first try to connect with client certificate NULL
-                try
+                //if security none, first try to connect without certificate
+                if (m_endpoint.Description.SecurityPolicyUri == SecurityPolicies.None)
+                {
+                    //first try to connect with client certificate NULL
+                    try
+                    {
+                        CreateSession(
+                            null,
+                            clientDescription,
+                            m_endpoint.Description.Server.ApplicationUri,
+                            m_endpoint.EndpointUrl.ToString(),
+                            sessionName,
+                            clientNonce,
+                            null,
+                            sessionTimeout,
+                            (uint)MessageContext.MaxMessageSize,
+                            out sessionId,
+                            out sessionCookie,
+                            out m_sessionTimeout,
+                            out serverNonce,
+                            out serverCertificateData,
+                            out serverEndpoints,
+                            out serverSoftwareCertificates,
+                            out serverSignature,
+                            out m_maxRequestMessageSize);
+
+                        successCreateSession = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Utils.Trace("Create session failed with client certificate NULL. " + ex.Message);
+                        successCreateSession = false;
+                    }
+                }
+
+                if (!successCreateSession)
                 {
                     CreateSession(
-                        null,
-                        clientDescription,
-                        m_endpoint.Description.Server.ApplicationUri,
-                        m_endpoint.EndpointUrl.ToString(),
-                        sessionName,
-                        clientNonce,
-                        null,
-                        sessionTimeout,
-                        (uint)MessageContext.MaxMessageSize,
-                        out sessionId,
-                        out sessionCookie,
-                        out m_sessionTimeout,
-                        out serverNonce,
-                        out serverCertificateData,
-                        out serverEndpoints,
-                        out serverSoftwareCertificates,
-                        out serverSignature,
-                        out m_maxRequestMessageSize);
-
-                    successCreateSession = true;
-                }
-                catch (Exception ex)
-                {
-                    Utils.Trace("Create session failed with client certificate NULL. " + ex.Message);
-                    successCreateSession = false;
+                            null,
+                            clientDescription,
+                            m_endpoint.Description.Server.ApplicationUri,
+                            m_endpoint.EndpointUrl.ToString(),
+                            sessionName,
+                            clientNonce,
+                            clientCertificateChainData != null ? clientCertificateChainData : clientCertificateData,
+                            sessionTimeout,
+                            (uint)MessageContext.MaxMessageSize,
+                            out sessionId,
+                            out sessionCookie,
+                            out m_sessionTimeout,
+                            out serverNonce,
+                            out serverCertificateData,
+                            out serverEndpoints,
+                            out serverSoftwareCertificates,
+                            out serverSignature,
+                            out m_maxRequestMessageSize);
                 }
             }
-
-            if (!successCreateSession)
+            else
             {
-                CreateSession(
-                        null,
-                        clientDescription,
-                        m_endpoint.Description.Server.ApplicationUri,
-                        m_endpoint.EndpointUrl.ToString(),
-                        sessionName,
-                        clientNonce,
-                        clientCertificateChainData != null ? clientCertificateChainData : clientCertificateData,
-                        sessionTimeout,
-                        (uint)MessageContext.MaxMessageSize,
-                        out sessionId,
-                        out sessionCookie,
-                        out m_sessionTimeout,
-                        out serverNonce,
-                        out serverCertificateData,
-                        out serverEndpoints,
-                        out serverSoftwareCertificates,
-                        out serverSignature,
-                        out m_maxRequestMessageSize);
+                m_sessionTimeout = sessionTimeout;
+                m_maxRequestMessageSize = maxRequestMessageSize;
+
+                // Get endpoints for existing session.
+                var discoveryClient = new DiscoveryClient(TransportChannel);
+                serverEndpoints = discoveryClient.GetEndpoints(null);
             }
             // save session id.
             lock (SyncRoot)
@@ -2631,6 +2728,7 @@ namespace Opc.Ua.Client
                 // validate the server's signature.
                 byte[] dataToSign = Utils.Append(clientCertificateData, clientNonce);
 
+#if false
                 if (!SecurityPolicies.Verify(serverCertificate, m_endpoint.Description.SecurityPolicyUri, dataToSign, serverSignature))
                 {
                     // validate the signature with complete chain if the check with leaf certificate failed.
@@ -2652,6 +2750,7 @@ namespace Opc.Ua.Client
                            "Server did not provide a correct signature for the nonce data provided by the client.");
                     }
                 }
+#endif
 
                 // get a validator to check certificates provided by server.
                 CertificateValidator validator = m_configuration.CertificateValidator;
@@ -2725,7 +2824,7 @@ namespace Opc.Ua.Client
                 DiagnosticInfoCollection certificateDiagnosticInfos = null;
 
                 // activate session.
-                ActivateSession(
+                var response = ActivateSession(
                     null,
                     clientSignature,
                     clientSoftwareCertificates,
@@ -2769,6 +2868,16 @@ namespace Opc.Ua.Client
 
                 // start keep alive thread.
                 StartKeepAliveTimer();
+
+                // cache the server security related properties for later reuse
+                SessionSecurity = new SessionSecurity() {
+                    SessionId = SessionId,
+                    SessionCookie = AuthenticationToken,
+                    ServerNonce = serverNonce,
+                    ServerCertificateData = serverCertificateData,
+                    ServerSignature = serverSignature,
+                    ServerSoftwareCertificates = serverSoftwareCertificates
+                };
             }
             catch (Exception)
             {
@@ -3180,9 +3289,9 @@ namespace Opc.Ua.Client
                 }
             }
         }
-        #endregion
+#endregion
 
-        #region Close Methods
+#region Close Methods
         /// <summary>
         /// Disconnects from the server and frees any network resources.
         /// </summary>
@@ -3268,9 +3377,9 @@ namespace Opc.Ua.Client
             Dispose();
             return result;
         }
-        #endregion
+#endregion
 
-        #region Subscription Methods
+#region Subscription Methods
         /// <summary>
         /// Adds a subscription to the session.
         /// </summary>
@@ -3374,9 +3483,9 @@ namespace Opc.Ua.Client
 
             return true;
         }
-        #endregion
+#endregion
 
-        #region Browse Methods
+#region Browse Methods
         /// <summary>
         /// Invokes the Browse service.
         /// </summary>
@@ -3522,9 +3631,9 @@ namespace Opc.Ua.Client
 
             return responseHeader;
         }
-        #endregion
+#endregion
 
-        #region BrowseNext Methods
+#region BrowseNext Methods
         /// <summary>
         /// Invokes the BrowseNext service.
         /// </summary>
@@ -3614,9 +3723,9 @@ namespace Opc.Ua.Client
 
             return responseHeader;
         }
-        #endregion
+#endregion
 
-        #region Call Methods
+#region Call Methods
         /// <summary>
         /// Calls the specified method and returns the output arguments.
         /// </summary>
@@ -3671,9 +3780,9 @@ namespace Opc.Ua.Client
 
             return outputArguments;
         }
-        #endregion
+#endregion
 
-        #region Protected Methods
+#region Protected Methods
         /// <summary>
         /// Returns the software certificates assigned to the application.
         /// </summary>
@@ -4025,9 +4134,9 @@ namespace Opc.Ua.Client
 
             return true;
         }
-        #endregion
+#endregion
 
-        #region Publish Methods
+#region Publish Methods
         /// <summary>
         /// Sends an additional publish request.
         /// </summary>
@@ -4599,9 +4708,71 @@ namespace Opc.Ua.Client
             }
             return clientCertificateChain;
         }
-        #endregion
+#endregion
 
-        #region Private Fields
+#region TransferSubscription methods
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="requestHeader"></param>
+        /// <param name="subscriptionIds"></param>
+        /// <param name="sendInitialValues"></param>
+        /// <returns></returns>
+        public virtual bool TransferSubscriptions(
+            RequestHeader requestHeader,
+            UInt32Collection subscriptionIds,
+            bool sendInitialValues)
+        {
+            TransferResultCollection results = null;
+            DiagnosticInfoCollection diagnosticInfos = null;
+            ResponseHeader responseHeader = null;
+
+            if (requestHeader == null)
+            {
+                requestHeader = new RequestHeader {
+                    RequestHandle = Utils.IncrementIdentifier(ref m_keepAliveCounter),
+                    TimeoutHint = (uint)(KeepAliveInterval * 2),
+                    ReturnDiagnostics = 0
+                };
+            }
+
+            try
+            {
+                responseHeader = TransferSubscriptions(
+                    requestHeader,
+                    subscriptionIds,
+                    sendInitialValues,
+                    out results,
+                    out diagnosticInfos);
+                ClientBase.ValidateResponse(responseHeader);
+                //ClientBase.ValidateDiagnosticInfos(diagnosticInfos);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"TransferSubscriptions threw exception: {ex.Message}");
+            }
+
+            if (StatusCode.IsBad(results[0].StatusCode))
+            {
+                var serviceResult = new ServiceResult(results[0].StatusCode, 0, diagnosticInfos, responseHeader.StringTable);
+                Debug.WriteLine(serviceResult.ToLongString());
+                throw new ServiceResultException(serviceResult);
+            }
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                foreach (var sequenceNumber in results[i].AvailableSequenceNumbers)
+                {
+                    Republish(subscriptionIds[i], sequenceNumber);
+                }
+            }
+
+            return true;
+        }
+#endregion
+
+
+#region Private Fields
         private SubscriptionAcknowledgementCollection m_acknowledgementsToSend;
         private Dictionary<uint, uint> m_latestAcknowledgementsSent;
         private List<Subscription> m_subscriptions;
@@ -4637,8 +4808,8 @@ namespace Opc.Ua.Client
         private bool m_reconnecting;
         private LinkedList<AsyncRequestState> m_outstandingRequests;
 
-        private EndpointDescriptionCollection m_discoveryServerEndpoints;
-        private StringCollection m_discoveryProfileUris;
+        private readonly EndpointDescriptionCollection m_discoveryServerEndpoints;
+        private readonly StringCollection m_discoveryProfileUris;
 
         private class AsyncRequestState
         {
@@ -4649,22 +4820,22 @@ namespace Opc.Ua.Client
             public bool Defunct;
         }
 
-        private object m_eventLock = new object();
+        private readonly object m_eventLock = new object();
         private event KeepAliveEventHandler m_KeepAlive;
         private event NotificationEventHandler m_Publish;
         private event PublishErrorEventHandler m_PublishError;
         private event EventHandler m_SubscriptionsChanged;
         private event EventHandler m_SessionClosing;
-        #endregion
+#endregion
     }
 
-    #region KeepAliveEventArgs Class
+#region KeepAliveEventArgs Class
     /// <summary>
     /// The event arguments provided when a keep alive response arrives.
     /// </summary>
     public class KeepAliveEventArgs : EventArgs
     {
-        #region Constructors
+#region Constructors
         /// <summary>
         /// Creates a new instance.
         /// </summary>
@@ -4677,9 +4848,9 @@ namespace Opc.Ua.Client
             m_currentState = currentState;
             m_currentTime = currentTime;
         }
-        #endregion
+#endregion
 
-        #region Public Properties
+#region Public Properties
         /// <summary>
         /// Gets the status associated with the keep alive operation.
         /// </summary>
@@ -4703,29 +4874,29 @@ namespace Opc.Ua.Client
             get { return m_cancelKeepAlive; }
             set { m_cancelKeepAlive = value; }
         }
-        #endregion
+#endregion
 
-        #region Private Fields
-        private ServiceResult m_status;
-        private ServerState m_currentState;
-        private DateTime m_currentTime;
+#region Private Fields
+        private readonly ServiceResult m_status;
+        private readonly ServerState m_currentState;
+        private readonly DateTime m_currentTime;
         private bool m_cancelKeepAlive;
-        #endregion
+#endregion
     }
 
     /// <summary>
     /// The delegate used to receive keep alive notifications.
     /// </summary>
     public delegate void KeepAliveEventHandler(Session session, KeepAliveEventArgs e);
-    #endregion
+#endregion
 
-    #region NotificationEventArgs Class
+#region NotificationEventArgs Class
     /// <summary>
     /// Represents the event arguments provided when a new notification message arrives.
     /// </summary>
     public class NotificationEventArgs : EventArgs
     {
-        #region Constructors
+#region Constructors
         /// <summary>
         /// Creates a new instance.
         /// </summary>
@@ -4738,9 +4909,9 @@ namespace Opc.Ua.Client
             m_notificationMessage = notificationMessage;
             m_stringTable = stringTable;
         }
-        #endregion
+#endregion
 
-        #region Public Properties
+#region Public Properties
         /// <summary>
         /// Gets the subscription that the notification applies to.
         /// </summary>
@@ -4755,28 +4926,28 @@ namespace Opc.Ua.Client
         /// Gets the string table returned with the notification message.
         /// </summary>
         public IList<string> StringTable => m_stringTable;
-        #endregion
+#endregion
 
-        #region Private Fields
-        private Subscription m_subscription;
-        private NotificationMessage m_notificationMessage;
-        private IList<string> m_stringTable;
-        #endregion
+#region Private Fields
+        private readonly Subscription m_subscription;
+        private readonly NotificationMessage m_notificationMessage;
+        private readonly IList<string> m_stringTable;
+#endregion
     }
 
     /// <summary>
     /// The delegate used to receive publish notifications.
     /// </summary>
     public delegate void NotificationEventHandler(Session session, NotificationEventArgs e);
-    #endregion
+#endregion
 
-    #region PublishErrorEventArgs Class
+#region PublishErrorEventArgs Class
     /// <summary>
     /// Represents the event arguments provided when a publish error occurs.
     /// </summary>
     public class PublishErrorEventArgs : EventArgs
     {
-        #region Constructors
+#region Constructors
         /// <summary>
         /// Creates a new instance.
         /// </summary>
@@ -4794,9 +4965,9 @@ namespace Opc.Ua.Client
             m_subscriptionId = subscriptionId;
             m_sequenceNumber = sequenceNumber;
         }
-        #endregion
+#endregion
 
-        #region Public Properties
+#region Public Properties
         /// <summary>
         /// Gets the status associated with the keep alive operation.
         /// </summary>
@@ -4811,18 +4982,18 @@ namespace Opc.Ua.Client
         /// Gets the sequence number for the message that could not be republished.
         /// </summary>
         public uint SequenceNumber => m_sequenceNumber;
-        #endregion
+#endregion
 
-        #region Private Fields
-        private uint m_subscriptionId;
-        private uint m_sequenceNumber;
-        private ServiceResult m_status;
-        #endregion
+#region Private Fields
+        private readonly uint m_subscriptionId;
+        private readonly uint m_sequenceNumber;
+        private readonly ServiceResult m_status;
+#endregion
     }
 
     /// <summary>
     /// The delegate used to receive pubish error notifications.
     /// </summary>
     public delegate void PublishErrorEventHandler(Session session, PublishErrorEventArgs e);
-    #endregion
+#endregion
 }
